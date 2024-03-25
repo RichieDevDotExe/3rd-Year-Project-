@@ -1,12 +1,28 @@
 #include <iostream>
 #include <wiringPi.h>
+#include <softPwm.h>
+#include <chrono>
+
 using namespace std;
+using namespace std::chrono;
 
 #define PIN1 7
 #define PIN2 15
 
+//measure distance function variables 
+int prevState = 0; 
+int currState; 
+float stateCount; 
+float wheelSize;
+float distance;
+float wheelEncoderRes = 10;
+auto timer;
+
+
+
+
 void stopMotors(){
-    cout << "Stopping!";
+    cout << "Stopping!" << endl;
     digitalWrite(16,LOW);
     digitalWrite(0,LOW);    
     digitalWrite(7,LOW);
@@ -33,17 +49,24 @@ void InitPins(){
     pinMode(3,OUTPUT);
     pinMode(4,OUTPUT);
 
-    //pinMode(12,PWM_OUTPUT);
-    //pinMode(13,PWM_OUTPUT);
-    //pinMode(14,PWM_OUTPUT);
-    //pinMode(6,PWM_OUTPUT);
+    pinMode(12,OUTPUT);
+    pinMode(13,OUTPUT);
+    pinMode(14,OUTPUT);
+    pinMode(6,OUTPUT);
+    
+    pinMode(29,INPUT);
+    
+    softPwmCreate(12,0,255);
+    softPwmCreate(13,0,255);
+    softPwmCreate(14,0,255);
+    softPwmCreate(6,0,255);
     
     stopMotors();
 }
 
 void setMotorSpeedsPWM(int16_t _motorFL, int16_t _motorFR, int16_t _motorBL, int16_t _motorBR)
 {
-    cout << "Set!";
+    cout << "Set!"<< endl;
     // Speed < 0 = backwards Speed > 0 forwards
     //get the target direction requested
     if (_motorFL < 0){
@@ -99,46 +122,71 @@ void setMotorSpeedsPWM(int16_t _motorFL, int16_t _motorFR, int16_t _motorBL, int
     }
 
     //set speed to invididual pins here.
-    //pwmWrite(12, _motorFL * 4);
-    //pwmWrite(13, _motorFR * 4);
-    //pwmWrite(14, _motorBL * 4);
-    //pwmWrite(6, _motorBR * 4);
+    softPwmWrite(12, abs(_motorFL));
+    softPwmWrite(13, abs(_motorFR));
+    softPwmWrite(14, abs(_motorBL));
+    softPwmWrite(6, abs(_motorBR));
 }
 
+//void measureDist(){
+    ////time start
+    //auto timerStart = steady_clock::now(); 
+    //while((//something != 1000){
+        //currState = digitalRead(29);
+        //if(currState != prevState){
+            //prevState = currState;
+            //stateCount += 1;
+        //}
+        
+        //timer = 
+    //}
+    
+    //distance = (stateCount / wheelEncoderRes) * wheelSize;
+    //stateCount = 0; 
+    //return distance;
+}
 
 int main(int argc, char const *argv[]){
     wiringPiSetup();
-    cout << "Running!";
     InitPins();
+    setMotorSpeedsPWM(255,255,255,255);
     while(1){
-        //forward
-        setMotorSpeedsPWM(255,255,255,255);
-        delay(5000);
-        stopMotors();
-        delay(1000);
-        //backward
-        setMotorSpeedsPWM(-255,-255,-255,-255);
-        delay(5000);
-        stopMotors();
-        delay(1000);
-        //turn left
-        setMotorSpeedsPWM(0,0,0,255);
-        delay(5000);
-        stopMotors();
-        delay(1000);
-        //turn right
-        setMotorSpeedsPWM(0,0,255,0);
-        delay(5000);
-        stopMotors();
-        delay(1000);
+        cout << digitalRead(29) << endl;
+    }
+}
+//int main(int argc, char const *argv[]){
+    //wiringPiSetup();
+    //cout << "Running!" << endl;
+    //InitPins();
+    //while(1){
+        ////forward
+        //setMotorSpeedsPWM(255,255,255,255);
+        //delay(5000);
+        //stopMotors();
+        //delay(1000);
+        ////backward
+        //setMotorSpeedsPWM(-255,-255,-255,-255);
+        //delay(5000);
+        //stopMotors();
+        //delay(1000);
+        ////turn left
+        //setMotorSpeedsPWM(0,0,0,255);
+        //delay(5000);
+        //stopMotors();
+        //delay(1000);
+        ////turn right
+        //setMotorSpeedsPWM(0,0,255,0);
+        //delay(5000);
+        //stopMotors();
+        //delay(1000);
         ////speed control 
         //setMotorSpeedsPWM(255,-128,-64,32);
         //delay(5000);
         //stopMotors();
         //delay(1000);
-    }
-    return 0;
-}
+    //}
+    //return 0;
+//}
 
  //int main(int argc, char const *argv[])
  //{
