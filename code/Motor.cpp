@@ -13,10 +13,9 @@ using namespace std::chrono;
 int prevState = 0; 
 int currState; 
 float stateCount; 
-float wheelSize;
-float distance;
+float wheelSize = 70;
 float wheelEncoderRes = 10;
-auto timer;
+bool timerCheck = false;
 
 
 
@@ -128,31 +127,40 @@ void setMotorSpeedsPWM(int16_t _motorFL, int16_t _motorFR, int16_t _motorBL, int
     softPwmWrite(6, abs(_motorBR));
 }
 
-//void measureDist(){
-    ////time start
-    //auto timerStart = steady_clock::now(); 
-    //while((//something != 1000){
-        //currState = digitalRead(29);
-        //if(currState != prevState){
-            //prevState = currState;
-            //stateCount += 1;
-        //}
+float measureDist(){
+    //time start
+    float distance = 99999;
+    int timertemp = 0;
+    auto timerStart = steady_clock::now(); 
+    while(timerCheck != true){
+        currState = digitalRead(29);
+        if(currState != prevState){
+            prevState = currState;
+            stateCount += 1;
+        }
         
-        //timer = 
-    //}
+        duration<double, std::milli> timer = (steady_clock::now() - timerStart); 
+        //timertemp = duration_cast<milliseconds>(timer).count();
+        cout << timertemp << endl;
+        if(duration_cast<milliseconds>(timer).count() == 2000){
+            timerCheck = true;
+        }
+        
+    }
     
-    //distance = (stateCount / wheelEncoderRes) * wheelSize;
-    //stateCount = 0; 
-    //return distance;
+    distance = (stateCount / wheelEncoderRes) * wheelSize;
+    cout << stateCount << endl;
+    stateCount = 0; 
+    timerCheck = false;
+    return distance * 4;
 }
 
 int main(int argc, char const *argv[]){
     wiringPiSetup();
     InitPins();
-    setMotorSpeedsPWM(255,255,255,255);
-    while(1){
-        cout << digitalRead(29) << endl;
-    }
+    setMotorSpeedsPWM(125,125,125,125);
+    cout << measureDist() << endl;
+    stopMotors();
 }
 //int main(int argc, char const *argv[]){
     //wiringPiSetup();
