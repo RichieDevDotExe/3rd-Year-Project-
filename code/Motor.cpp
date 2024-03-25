@@ -10,12 +10,16 @@ using namespace std::chrono;
 #define PIN2 15
 
 //measure distance function variables 
-int prevState = 0; 
-int currState; 
-float stateCount; 
+int prevState1 = 0; 
+int currState1; 
+int prevState2 = 0; 
+int currState2; 
+float stateCount1; 
+float stateCount2; 
 float wheelSize = 70;
 float wheelEncoderRes = 10;
 bool timerCheck = false;
+int moveTime = 2000;
 
 
 
@@ -54,6 +58,7 @@ void InitPins(){
     pinMode(6,OUTPUT);
     
     pinMode(29,INPUT);
+    pinMode(28,INPUT);
     
     softPwmCreate(12,0,255);
     softPwmCreate(13,0,255);
@@ -129,30 +134,45 @@ void setMotorSpeedsPWM(int16_t _motorFL, int16_t _motorFR, int16_t _motorBL, int
 
 float measureDist(){
     //time start
-    float distance = 99999;
+    float distance1 = 99999;
+    float distance2 = 99999;
     int timertemp = 0;
     auto timerStart = steady_clock::now(); 
     while(timerCheck != true){
-        currState = digitalRead(29);
-        if(currState != prevState){
-            prevState = currState;
-            stateCount += 1;
+        currState1 = digitalRead(29);
+        currState2 = digitalRead(29);
+        if(currState1 != prevState1){
+            prevState1 = currState1;
+            stateCount1 += 1;
+        }
+        if(currState2 != prevState2){
+            prevState2 = currState2;
+            stateCount2 += 1;
         }
         
         duration<double, std::milli> timer = (steady_clock::now() - timerStart); 
         //timertemp = duration_cast<milliseconds>(timer).count();
         cout << timertemp << endl;
-        if(duration_cast<milliseconds>(timer).count() == 2000){
+        if(duration_cast<milliseconds>(timer).count() == moveTime){
             timerCheck = true;
         }
         
     }
     
-    distance = (stateCount / wheelEncoderRes) * wheelSize;
-    cout << stateCount << endl;
-    stateCount = 0; 
+    distance1 = (stateCount1 / wheelEncoderRes) * wheelSize;
+    distance2 = (stateCount2 / wheelEncoderRes) * wheelSize;
+    cout << stateCount1 << endl;
+    cout << stateCount2 << endl;
+    cout << distance1 << endl;
+    cout << distance2 << endl;
+    
+    
+    cout << "distance1 - " << distance1 << "mm velocity - " << distance1/moveTime << "mm/s" << endl;
+    cout << "distance2 - " << distance2 << "mm velocity - " << distance2/moveTime << "mm/s" << endl;
+    stateCount1 = 0; 
+    stateCount2 = 0; 
     timerCheck = false;
-    return distance * 4;
+    return distance1;
 }
 
 int main(int argc, char const *argv[]){
