@@ -33,12 +33,12 @@ void InitPins(){
     pinMode(3,OUTPUT);
     pinMode(4,OUTPUT);
 
+    //pinMode(12,PWM_OUTPUT);
+    //pinMode(13,PWM_OUTPUT);
+    //pinMode(14,PWM_OUTPUT);
+    //pinMode(6,PWM_OUTPUT);
+    
     stopMotors();
-
-    // pinMode(4,PWM_OUTPUT);
-    // pinMode(4,PWM_OUTPUT);
-    // pinMode(4,PWM_OUTPUT);
-    // pinMode(4,PWM_OUTPUT);
 }
 
 void setMotorSpeedsPWM(int16_t _motorFL, int16_t _motorFR, int16_t _motorBL, int16_t _motorBR)
@@ -99,6 +99,10 @@ void setMotorSpeedsPWM(int16_t _motorFL, int16_t _motorFR, int16_t _motorBL, int
     }
 
     //set speed to invididual pins here.
+    //pwmWrite(12, _motorFL * 4);
+    //pwmWrite(13, _motorFR * 4);
+    //pwmWrite(14, _motorBL * 4);
+    //pwmWrite(6, _motorBR * 4);
 }
 
 
@@ -108,25 +112,30 @@ int main(int argc, char const *argv[]){
     InitPins();
     while(1){
         //forward
-        setMotorSpeedsPWM(1,1,1,1);
+        setMotorSpeedsPWM(255,255,255,255);
         delay(5000);
         stopMotors();
         delay(1000);
         //backward
-        setMotorSpeedsPWM(-1,-1,-1,-1);
+        setMotorSpeedsPWM(-255,-255,-255,-255);
         delay(5000);
         stopMotors();
         delay(1000);
         //turn left
-        setMotorSpeedsPWM(0,0,0,1);
+        setMotorSpeedsPWM(0,0,0,255);
         delay(5000);
         stopMotors();
         delay(1000);
         //turn right
-        setMotorSpeedsPWM(0,0,1,0);
+        setMotorSpeedsPWM(0,0,255,0);
         delay(5000);
         stopMotors();
         delay(1000);
+        ////speed control 
+        //setMotorSpeedsPWM(255,-128,-64,32);
+        //delay(5000);
+        //stopMotors();
+        //delay(1000);
     }
     return 0;
 }
