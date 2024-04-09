@@ -3,6 +3,7 @@
 #include <softPwm.h>
 #include <chrono>
 #include <cmath>
+#include "PID_v2.cpp"
 
 using namespace std;
 using namespace std::chrono;
@@ -22,8 +23,38 @@ float wheelSize = 62.5;
 float wheelEncoderRes = 10;
 float lengthBetweenWheels = 150;
 bool timerCheck = false;
-int moveTime = 1000;
+int moveTime = 100;
 
+//PID
+//forwards = 1 backwards = -1
+int wheelDirR = 1;
+int wheelDirL = 1;
+double wheelVelR = 0;
+double wheelVelL = 0;
+double currentWheelVelR = 0;
+double currentWheelVelL = 0;
+double targetWheelVelR = 0;
+double targetWheelVelL = 0;
+double wheelPWML = 0;
+double wheelPWMR = 0;
+double* velocities;
+
+float kp = 2;
+float ki = 1;
+float kd = 0;
+
+PID leftMotorPID(&currentWheelVelL,&wheelPWML,&targetWheelVelL,kp,ki,kd,DIRECT);
+PID rightMotorPID(&currentWheelVelR,&wheelPWMR,&targetWheelVelR,kp,ki,kd,DIRECT);
+
+void PIDinit(){
+    leftMotorPID.SetMode(AUTOMATIC);
+    leftMotorPID.SetSampleTime(100);
+    leftMotorPID.SetOutputLimits(0, 255);
+    
+    rightMotorPID.SetMode(AUTOMATIC);
+    rightMotorPID.SetSampleTime(100);
+    rightMotorPID.SetOutputLimits(0, 255);
+}
 double deg2rad(double deg)
 {
     return deg * M_PI / 180;
@@ -73,70 +104,6 @@ void InitPins(){
     stopMotors();
 }
 
-//void setMotorSpeedsPWM(int16_t _motorFL, int16_t _motorFR, int16_t _motorBL, int16_t _motorBR)
-//{
-    //cout << "Set!"<< endl;
-    //// Speed < 0 = backwards Speed > 0 forwards
-    ////get the target direction requested
-    //if (_motorFL < 0){
-        //digitalWrite(16,LOW);
-        //digitalWrite(0,HIGH);
-    //}
-    //else if(_motorFL == 0){
-        //digitalWrite(16,LOW);
-        //digitalWrite(0,LOW);
-    //}
-    //else {
-        //digitalWrite(16,HIGH);
-        //digitalWrite(0,LOW);
-    //}
-
-    //if (_motorFR < 0){
-        //digitalWrite(7,LOW);
-        //digitalWrite(15,HIGH);
-    //}
-    //else if(_motorFR == 0){
-        //digitalWrite(7,LOW);
-        //digitalWrite(15,LOW);
-    //}
-    //else {
-        //digitalWrite(7,HIGH);
-        //digitalWrite(15,LOW);
-    //}
-
-    //if (_motorBL < 0){
-        //digitalWrite(3,LOW);
-        //digitalWrite(4,HIGH);
-    //}
-    //else if(_motorBL == 0){
-        //digitalWrite(3,LOW);
-        //digitalWrite(4,LOW);
-    //}
-    //else {
-        //digitalWrite(3,HIGH);
-        //digitalWrite(4,LOW);
-    //}
-
-    //if (_motorBR < 0){
-        //digitalWrite(1,LOW);
-        //digitalWrite(2,HIGH);
-    //}
-    //else if(_motorBR == 0){
-        //digitalWrite(1,LOW);
-        //digitalWrite(2,LOW);
-    //}
-    //else {
-        //digitalWrite(1,HIGH);
-        //digitalWrite(2,LOW);
-    //}
-
-    ////set speed to invididual pins here.
-    //softPwmWrite(12, abs(_motorFL));
-    //softPwmWrite(13, abs(_motorFR));
-    //softPwmWrite(14, abs(_motorBL));
-    //softPwmWrite(6, abs(_motorBR));
-//}
-
 void setMotorSpeedsPWM(int16_t _motorL, int16_t _motorR)
 {
     cout << "Set!"<< endl;
@@ -183,6 +150,59 @@ void setMotorSpeedsPWM(int16_t _motorL, int16_t _motorR)
     softPwmWrite(13, abs(_motorR));
     softPwmWrite(14, abs(_motorL));
     softPwmWrite(6, abs(_motorR));
+    
+    wheelPWML = _motorL;
+    wheelPWMR = _motorR;
+}
+
+void updateMotorPWM(){
+    cout << "update!"<< endl;
+    // Speed < 0 = backwards Speed > 0 forwards
+    //get the target direction requested
+    if (wheelDirL < 0){
+        digitalWrite(16,LOW);
+        digitalWrite(0,HIGH);
+        digitalWrite(3,LOW);
+        digitalWrite(4,HIGH);
+    }
+    else if(wheelDirL == 0){
+        digitalWrite(16,LOW);
+        digitalWrite(0,LOW);
+        digitalWrite(3,LOW);
+        digitalWrite(4,LOW);
+    }
+    else {
+        digitalWrite(16,HIGH);
+        digitalWrite(0,LOW);
+        digitalWrite(3,HIGH);
+        digitalWrite(4,LOW);
+    }
+    if (wheelDirR < 0){
+        digitalWrite(7,LOW);
+        digitalWrite(15,HIGH);
+        digitalWrite(1,LOW);
+        digitalWrite(2,HIGH);
+    }
+    else if(wheelDirR == 0){
+        digitalWrite(7,LOW);
+        digitalWrite(15,LOW);
+        digitalWrite(1,LOW);
+        digitalWrite(2,LOW);
+    }
+    else {
+        digitalWrite(7,HIGH);
+        digitalWrite(15,LOW);
+        digitalWrite(1,HIGH);
+        digitalWrite(2,LOW);
+    }
+    
+    softPwmWrite(12, abs(wheelPWML));
+    softPwmWrite(13, abs(wheelPWMR));
+    softPwmWrite(14, abs(wheelPWML));
+    softPwmWrite(6, abs(wheelPWMR));
+    
+    cout<< "setting " <<wheelPWMR << endl;
+    cout<< "setting " <<wheelPWML << endl;
 }
 
 float measureDist(){
@@ -228,6 +248,51 @@ float measureDist(){
     return distance1;
 }
 
+double* measureVel(){
+    //time start
+    float distance1 = 99999;
+    float distance2 = 99999;
+    int timertemp = 0;
+    auto timerStart = steady_clock::now(); 
+    while(timerCheck != true){
+        currState1 = digitalRead(29);
+        currState2 = digitalRead(28);
+        if(currState1 != prevState1){
+            prevState1 = currState1;
+            stateCount1 += 1;
+        }
+        if(currState2 != prevState2){
+            prevState2 = currState2;
+            stateCount2 += 1;
+        }
+        
+        duration<double, std::milli> timer = (steady_clock::now() - timerStart); 
+        //timertemp = duration_cast<milliseconds>(timer).count();
+        //cout << timertemp << endl;
+        if(duration_cast<milliseconds>(timer).count() == moveTime){
+            timerCheck = true;
+        }
+        
+    }
+    
+    distance1 = (stateCount1 / wheelEncoderRes) * wheelSize;
+    distance2 = (stateCount2 / wheelEncoderRes) * wheelSize;
+    //cout << distance1 << endl;
+    //cout << distance2 << endl;
+    
+    double* velocity = new double[2];
+    
+    velocity[0] = distance1/moveTime*1000;
+    velocity[1] = distance2/moveTime*1000;
+    //cout << velocity[0] << endl;
+    //cout << velocity[1] << endl;
+    stateCount1 = 0; 
+    stateCount2 = 0; 
+    timerCheck = false;
+    return velocity;
+}
+
+//not needed?
 int velocityToPWM(float input){
     //max velocity input 110mm/s
     int val;
@@ -241,8 +306,6 @@ int velocityToPWM(float input){
     return val;
 }
 
-
-
 float* calVelocity(float inputVelocity,float inputAngle){
     float* velocity = new float[2];
     
@@ -251,87 +314,70 @@ float* calVelocity(float inputVelocity,float inputAngle){
     return velocity;
 } 
 
+void setTargetVelocity(float leftTarget, float rightTarget){
+    if(leftTarget < 0){
+        wheelDirL = -1;
+    }
+    else{
+        wheelDirL = 1; 
+    }
+    if(rightTarget < 0){
+        wheelDirR = -1;
+    }
+    else{
+        wheelDirR = 1; 
+    }
+    
+    targetWheelVelR = rightTarget;
+    targetWheelVelL = leftTarget;
+}
+
+void updatePID(){
+    if(leftMotorPID.Compute()){
+        //currentWheelVelL = 0; 
+        cout<<"update left" << endl;
+    }
+    if(rightMotorPID.Compute()){
+        //currentWheelVelR = 0; 
+    }
+    
+}
+
+void loop(){
+    updatePID();
+    
+    updateMotorPWM();
+}
+
 int main(int argc, char const *argv[]){
     wiringPiSetup();
     InitPins();
-    
-    
-    float* velocity = calVelocity(0,270);
-    cout << velocity[0] << " " << velocity[1]<< endl;
-    
-    int speed1 = velocityToPWM(velocity[0]);
-    int speed2 = velocityToPWM(velocity[1]);
-    
-    
-    setMotorSpeedsPWM(98,-98);
-    cout << measureDist() << endl;
+    PIDinit();
+    setTargetVelocity(80,80);
+    setMotorSpeedsPWM(96,96);
+    cout << "start" << endl;
+    while(1){
+        velocities = measureVel();
+        currentWheelVelL = velocities[0]; 
+        currentWheelVelR = velocities[1]; 
+        loop();
+        //cout << "target" <<targetWheelVelL << endl;
+        //cout << "current" <<currentWheelVelL << endl;
+    }
     stopMotors();
 }
+
 //int main(int argc, char const *argv[]){
     //wiringPiSetup();
-    //cout << "Running!" << endl;
     //InitPins();
-    //while(1){
-        ////forward
-        //setMotorSpeedsPWM(255,255,255,255);
-        //delay(5000);
-        //stopMotors();
-        //delay(1000);
-        ////backward
-        //setMotorSpeedsPWM(-255,-255,-255,-255);
-        //delay(5000);
-        //stopMotors();
-        //delay(1000);
-        ////turn left
-        //setMotorSpeedsPWM(0,0,0,255);
-        //delay(5000);
-        //stopMotors();
-        //delay(1000);
-        ////turn right
-        //setMotorSpeedsPWM(0,0,255,0);
-        //delay(5000);
-        //stopMotors();
-        //delay(1000);
-        ////speed control 
-        //setMotorSpeedsPWM(255,-128,-64,32);
-        //delay(5000);
-        //stopMotors();
-        //delay(1000);
-    //}
-    //return 0;
+    
+    
+    //float* velocity = calVelocity(0,270);
+    //cout << velocity[0] << " " << velocity[1]<< endl;
+    
+    
+    
+    //setMotorSpeedsPWM(98,-98);
+    //cout << measureDist() << endl;
+    //stopMotors();
 //}
-
- //int main(int argc, char const *argv[])
- //{
-     //wiringPiSetup();
-
-     //pinMode(7,OUTPUT);
-     //pinMode(15,OUTPUT);
-     //pinMode(16,OUTPUT);
-     //pinMode(0, INPUT);
-    
-     //digitalWrite(7,HIGH);
-     //digitalWrite(15,LOW);
-     //digitalWrite(16,LOW);
-    
-     //cout << "reading";
-     //cout << digitalRead(7);
-     //cout << digitalRead(15);
-     //cout << digitalRead(16);
-
-     //cout << "writing";
-     //digitalWrite(7,HIGH);
-     //digitalWrite(15,LOW);
-     //digitalWrite(16,LOW);
-    
-     //cout << "reading";
-     //cout << digitalRead(7);
-     //cout << digitalRead(15);
-     //cout << digitalRead(16);
-    
-     ////while(1){
-         ////cout<< digitalRead(0);
-     ////}
-     //cout << "Hello World!";
-     //return 0;
- //}
