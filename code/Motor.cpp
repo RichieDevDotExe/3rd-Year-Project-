@@ -18,12 +18,20 @@ int prevState2 = 0;
 int currState2; 
 float stateCount1; 
 float stateCount2; 
-//radius of 2 wheels combined
+////radius of 2 wheels combined
 float wheelSize = 62.5;
 float wheelEncoderRes = 10;
 float lengthBetweenWheels = 150;
 bool timerCheck = false;
-int moveTime = 100;
+int moveTime = 250;
+
+//state of robot variables 
+//varaibles used to describe the current state of the robot in relation to the world view
+double currentAngle = 0;
+double currentXPos = 0;
+double currentYPos = 0;
+
+double errorRoom = 25;
 
 //PID
 //forwards = 1 backwards = -1
@@ -39,22 +47,53 @@ double wheelPWML = 0;
 double wheelPWMR = 0;
 double* velocities;
 
-float kp = 2;
+//wheel PID settings
+float kp = 0.5;
 float ki = 1;
 float kd = 0;
+
+//movement PID settings
+float mkp = 0.5;
+float mki = 0;
+float mkd = 0;
+double travelTime = 1000;
+double maxVelocity = 110;
+double targetAngle = 0;
+double targetXPos = 0;
+double targetYPos = 0;
+double instAngle = 0;
+double instXPos = 0;
+double instYPos = 0;
 
 PID leftMotorPID(&currentWheelVelL,&wheelPWML,&targetWheelVelL,kp,ki,kd,DIRECT);
 PID rightMotorPID(&currentWheelVelR,&wheelPWMR,&targetWheelVelR,kp,ki,kd,DIRECT);
 
+PID movemnentXPID(&currentXPos,&instXPos,&targetXPos,kp,ki,kd,DIRECT);
+PID movemnentYPID(&currentYPos,&instYPos,&targetYPos,kp,ki,kd,DIRECT);
+PID movemnentAPID(&currentAngle,&instAngle,&targetAngle,kp,ki,kd,DIRECT);
+
 void PIDinit(){
     leftMotorPID.SetMode(AUTOMATIC);
-    leftMotorPID.SetSampleTime(100);
+    leftMotorPID.SetSampleTime(moveTime);
     leftMotorPID.SetOutputLimits(0, 255);
     
     rightMotorPID.SetMode(AUTOMATIC);
-    rightMotorPID.SetSampleTime(100);
+    rightMotorPID.SetSampleTime(moveTime);
     rightMotorPID.SetOutputLimits(0, 255);
+    
+    movemnentXPID.SetMode(AUTOMATIC);
+    movemnentXPID.SetSampleTime(travelTime);
+    movemnentXPID.SetOutputLimits(0, maxVelocity);
+    
+    movemnentYPID.SetMode(AUTOMATIC);
+    movemnentYPID.SetSampleTime(travelTime);
+    movemnentYPID.SetOutputLimits(0, maxVelocity);
+    
+    movemnentAPID.SetMode(AUTOMATIC);
+    movemnentAPID.SetSampleTime(travelTime);
+    movemnentAPID.SetOutputLimits(0, 360);
 }
+
 double deg2rad(double deg)
 {
     return deg * M_PI / 180;
@@ -200,16 +239,11 @@ void updateMotorPWM(){
     softPwmWrite(13, abs(wheelPWMR));
     softPwmWrite(14, abs(wheelPWML));
     softPwmWrite(6, abs(wheelPWMR));
-    
-    cout<< "setting " <<wheelPWMR << endl;
-    cout<< "setting " <<wheelPWML << endl;
+
 }
 
-float measureDist(){
+float* measureDist(){
     //time start
-    float distance1 = 99999;
-    float distance2 = 99999;
-    int timertemp = 0;
     auto timerStart = steady_clock::now(); 
     while(timerCheck != true){
         currState1 = digitalRead(29);
@@ -229,23 +263,45 @@ float measureDist(){
         if(duration_cast<milliseconds>(timer).count() == moveTime){
             timerCheck = true;
         }
-        
     }
     
-    distance1 = (stateCount1 / wheelEncoderRes) * wheelSize;
-    distance2 = (stateCount2 / wheelEncoderRes) * wheelSize;
-    cout << stateCount1 << endl;
-    cout << stateCount2 << endl;
-    cout << distance1 << endl;
-    cout << distance2 << endl;
+    float* distance = new float[2];
+    distance[0] = (stateCount1 / wheelEncoderRes) * wheelSize;
+    distance[1] = (stateCount2 / wheelEncoderRes) * wheelSize;
+    //cout << stateCount1 << endl;
+    //cout << stateCount2 << endl;
+    //cout << distance1 << endl;
+    //cout << distance2 << endl;
     
     
-    cout << "distance1 - " << distance1 << "mm velocity - " << (distance1/moveTime)*1000 << "mm/s" << endl;
-    cout << "distance2 - " << distance2 << "mm velocity - " << (distance2/moveTime)*1000 << "mm/s" << endl;
+    //cout << "distance1 - " << distance1 << "mm velocity - " << (distance1/moveTime)*1000 << "mm/s" << endl;
+    //cout << "distance2 - " << distance2 << "mm velocity - " << (distance2/moveTime)*1000 << "mm/s" << endl;
     stateCount1 = 0; 
     stateCount2 = 0; 
     timerCheck = false;
-    return distance1;
+    
+    
+    return distance;
+}
+
+//cal Xdot Ydot and angleDot
+void calInstantaneousMovement(){
+    movemnentXPID.Compute();
+    movemnentYPID.Compute();
+    movemnentAPID.Compute();
+}
+
+void setTargetLocation(double xGoal, double yGoal, double angleGoal){
+    targetAngle = angleGoal;
+    targetXPos = xGoal;
+    targetYPos = yGoal;
+}
+
+void updateCurrLocation(double rwheeldist, double lwheeldist){
+    double centreDist = (rwheeldist + lwheeldist) /2;
+    currentXPos = currentXPos + (centreDist * cos(currentAngle));
+    currentYPos = currentYPos + (centreDist * sin(currentAngle));
+    currentAngle = currentAngle + ((rwheeldist - lwheeldist )/ lengthBetweenWheels);
 }
 
 double* measureVel(){
@@ -292,6 +348,16 @@ double* measureVel(){
     return velocity;
 }
 
+//cal individual wheel vels
+float* calWheelVel(double xDot, double yDot, double angleDot){
+    float* wheelVel = new float[2];
+    //left wheel
+    wheelVel[0] = xDot*cos(currentAngle)+yDot*sin(currentAngle) - ((angleDot * lengthBetweenWheels)/2*wheelSize);
+    //right wheel 
+    wheelVel[1] = xDot*cos(currentAngle)+yDot*sin(currentAngle) + ((angleDot * lengthBetweenWheels)/2*wheelSize);
+    return wheelVel;
+}
+
 //not needed?
 int velocityToPWM(float input){
     //max velocity input 110mm/s
@@ -314,6 +380,7 @@ float* calVelocity(float inputVelocity,float inputAngle){
     return velocity;
 } 
 
+//sets the target velocity for each wheel for the PID to use
 void setTargetVelocity(float leftTarget, float rightTarget){
     if(leftTarget < 0){
         wheelDirL = -1;
@@ -328,22 +395,28 @@ void setTargetVelocity(float leftTarget, float rightTarget){
         wheelDirR = 1; 
     }
     
-    targetWheelVelR = rightTarget;
-    targetWheelVelL = leftTarget;
+    targetWheelVelR = abs(rightTarget);
+    targetWheelVelL = abs(leftTarget);
 }
 
+//updates the PID for each wheel 
 void updatePID(){
     if(leftMotorPID.Compute()){
-        //currentWheelVelL = 0; 
-        cout<<"update left" << endl;
+        currentWheelVelL = 0; 
+        //cout<<"update left" << endl;
     }
     if(rightMotorPID.Compute()){
-        //currentWheelVelR = 0; 
+        currentWheelVelR = 0; 
     }
-    
 }
 
+//loop to update the speed of each wheel 
 void loop(){
+    velocities = measureVel();
+    currentWheelVelL = velocities[0]; 
+    currentWheelVelR = velocities[1]; 
+    cout << "Left Velocity:"<< velocities[0]*wheelDirL << " Right Velocity: " << velocities[1]*wheelDirR << endl;
+    
     updatePID();
     
     updateMotorPWM();
@@ -353,16 +426,12 @@ int main(int argc, char const *argv[]){
     wiringPiSetup();
     InitPins();
     PIDinit();
-    setTargetVelocity(80,80);
-    setMotorSpeedsPWM(96,96);
+    setTargetVelocity(80,-80);
+    setMotorSpeedsPWM(0,0);
     cout << "start" << endl;
     while(1){
-        velocities = measureVel();
-        currentWheelVelL = velocities[0]; 
-        currentWheelVelR = velocities[1]; 
         loop();
         //cout << "target" <<targetWheelVelL << endl;
-        //cout << "current" <<currentWheelVelL << endl;
     }
     stopMotors();
 }
