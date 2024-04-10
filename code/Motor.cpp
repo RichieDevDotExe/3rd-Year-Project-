@@ -18,6 +18,7 @@ using namespace std::chrono;
 
 
 //measure velocity function variables 
+// 1 = left wheel 2 = right wheel
 int prevState1; 
 int currState1; 
 int prevState2; 
@@ -54,8 +55,8 @@ double currentXPos = 0;
 double currentYPos = 0;
 bool reachGoal = false;
 
-double errorRoom = 25;
-double angleErrorRoom = 30;
+double errorRoom = 20;
+double angleErrorRoom = 360;
 
 
 
@@ -78,17 +79,21 @@ double* velocities;
 //float kp =3;
 //float ki = 1.4;
 //float kd = 0.4;
+//movement PID settings
+//float mkp = 0.7;
+//float mki = 0.4;
+//float mkd = 0.1;
 
 //workstation - PID settings when wheels are not touching anything unaffected by the friction of the floor
 //wheel PID settings
-float kp =1.2;
-float ki = 0.7;
+float kp =0.3;
+float ki = 0.3;
 float kd = 0.1;
 
 //movement PID settings
-float mkp = 0.5;
-float mki = 0;
-float mkd = 0;
+float mkp = 0.7;
+float mki = 0.2;
+float mkd = 1.2;
 
 double travelTime = 1000;
 double maxVelocity = 110;
@@ -133,7 +138,7 @@ void PIDinit(){
 
 
 double deg2rad(double deg){
-    return deg * M_PI / 180;
+    return deg * (M_PI / 180);
 }
 
 
@@ -337,7 +342,7 @@ void setTargetLocation(double xGoal, double yGoal, double angleGoal){
     targetYPos = yGoal;
 }
 
-void updateCurrLocation(double rwheeldist, double lwheeldist){
+void updateCurrLocation(double lwheeldist, double rwheeldist){
     double centreDist = (rwheeldist + lwheeldist) /2;
     currentXPos = currentXPos + (centreDist * cos(currentAngle));
     currentYPos = currentYPos + (centreDist * sin(currentAngle));
@@ -392,9 +397,9 @@ double* measureVel(){
 float* calWheelVel(double xDot, double yDot, double angleDot){
     float* wheelVel = new float[2];
     //left wheel
-    wheelVel[0] = xDot*cos(currentAngle)+yDot*sin(currentAngle) - ((angleDot * lengthBetweenWheels)/2*wheelSize);
+    wheelVel[0] = xDot*cos(deg2rad(currentAngle))+yDot*sin(deg2rad(currentAngle)) - ((angleDot * lengthBetweenWheels)/(2*wheelSize));
     //right wheel 
-    wheelVel[1] = xDot*cos(currentAngle)+yDot*sin(currentAngle) + ((angleDot * lengthBetweenWheels)/2*wheelSize);
+    wheelVel[1] = xDot*cos(deg2rad(currentAngle))+yDot*sin(deg2rad(currentAngle)) + ((angleDot * lengthBetweenWheels)/(2*wheelSize));
     return wheelVel;
 }
 
@@ -421,6 +426,7 @@ int PWMtoVelocity(float input){
     return vel;
 }
 
+//replaced by calWheelVelocity()
 float* calVelocity(float inputVelocity,float inputAngle){
     float* velocity = new float[2];
 
@@ -471,7 +477,7 @@ void updateLoop(){
     velocities = measureVel();
     currentWheelVelL = velocities[0]; 
     currentWheelVelR = velocities[1]; 
-    cout << "Left Velocity:"<< wheelPWML << " Right Velocity: " << wheelPWMR << endl;
+    //cout << "Left Velocity:"<< wheelPWML << " Right Velocity: " << wheelPWMR << endl;
     cout << "Left Velocity:"<< velocities[0]*wheelDirL << " Right Velocity: " << velocities[1]*wheelDirR << endl;
 
     updatePID();
@@ -497,9 +503,9 @@ double* moveRobot(){
     }
     
     double* distance = new double[2];
-    cout << moveStateCount1 << " " << moveStateCount2 << endl;
-    distance[0] = (moveStateCount1 / wheelEncoderRes) * wheelSize;
-    distance[1] = (moveStateCount2 / wheelEncoderRes) * wheelSize;
+    //cout << moveStateCount1 << " " << moveStateCount2 << endl;
+    distance[0] = ((moveStateCount1 / wheelEncoderRes) * wheelSize)*wheelDirL;
+    distance[1] = ((moveStateCount2 / wheelEncoderRes) * wheelSize)*wheelDirR;
     //cout << stateCount1 << endl;
     //cout << stateCount2 << endl;
     //cout << distance1 << endl;
@@ -535,18 +541,18 @@ double* moveRobot(){
 
 
 ////test PID for both wheels
-//int main(int argc, char const *argv[]){
-    //wiringPiSetup();
-    //InitPins();
-    //PIDinit();
-    //setTargetVelocity(80,80);
-    //setMotorSpeedsPWM(0,0);
-    //cout << "start" << endl;
-    //while(1){
-        //updateLoop();
-    //}
-    //stopMotors();
-//}
+int main(int argc, char const *argv[]){
+    wiringPiSetup();
+    InitPins();
+    PIDinit();
+    setTargetVelocity(80,80);
+    setMotorSpeedsPWM(0,0);
+    cout << "start" << endl;
+    while(1){
+        updateLoop();
+    }
+    stopMotors();
+}
 
 
 
@@ -568,37 +574,62 @@ double* moveRobot(){
 //}
 
 //setting target goal 
-int main(int argc, char const *argv[]){
-    wiringPiSetup();
-    InitPins();
-    PIDinit();
+
+//int main(int argc, char const *argv[]){
+    //wiringPiSetup();
+    //InitPins();
+    //PIDinit();
+    //int tempcount = 0;
     
-    setMotorSpeedsPWM(0,0);
+    //setMotorSpeedsPWM(0,0);
     
-    bool goalReached = false;
-    double* dist = new double[2];
-    setTargetLocation(400, 0, 0);
-    while(goalReached != true){
-        travelTime = 1000;
-        while(moveTimerCheck != true){
-            calInstantaneousMovement();
-            float* calculatedVel = calVelocity();
-            dist = moveRobot();
-            auto moveTimerStart = steady_clock::now(); 
-            duration<double, std::milli> moveTimer = (steady_clock::now() - moveTimerStart); 
-            //timertemp = duration_cast<milliseconds>(timer).count();
-            //cout << timertemp << endl;
-            if(duration_cast<milliseconds>(moveTimer).count() >= travelTime){
-                moveTimerCheck = true;
-            }
-        }
-        updateCurrLocation(dist[0],dist[1]);
-        if(((currentXPos <= targetXPos + errorRoom) && (currentXPos >= targetXPos - errorRoom)) && ((currentYPos <= targetYPos + errorRoom) && (currentYPos >= targetYPos - errorRoom)) && ((currentAngle <= targetAngle + angleErrorRoom) && (currentAngle >= targetAngle - angleErrorRoom))){
-            goalReached = true;
-        }
-        else{
-            cout<<"goal not reached" <<endl;
-        }
-    }
-    stopMotors();
-}
+    //bool goalReached = false;
+    //double* dist = new double[2];
+    //setTargetLocation(-400, 0, 0);
+    //cout << "set target" << endl;
+    //travelTime = 1000;
+    //while((goalReached != true) && (tempcount !=999)){
+    ////while(tempcount != 5){
+        //cout << " " << endl;
+        //while(moveTimerCheck != true){
+            //cout << "current CurrX-" << currentXPos<< " CurrY-" << currentYPos<<" CurrA-" <<  currentAngle<< endl;
+            //cout << "target TarX-" << targetXPos<< " TarY-" << targetYPos<<" TarA-" <<  targetAngle<< endl;
+            //calInstantaneousMovement();
+            //cout << "PID Output InstX-" << instXPos<< " InstY-" << instYPos<<" InstA-" <<  instAngle<< endl;
+            //auto moveTimerStart = steady_clock::now(); 
+            ////cout << "calcualting movement" << endl;
+            //float* calculatedVel = calWheelVel(instXPos,instYPos,instAngle);
+            ////cout << "cal vel Left-"<< calculatedVel[0]<< " right-" << calculatedVel[1]<< endl;
+            //setTargetVelocity(calculatedVel[0],calculatedVel[1]);
+            //dist = moveRobot();
+            //duration<double, std::milli> moveTimer = (steady_clock::now() - moveTimerStart); 
+            ////timertemp = duration_cast<milliseconds>(timer).count();
+            ////cout << duration_cast<milliseconds>(moveTimer).count() << endl;
+            //if(duration_cast<milliseconds>(moveTimer).count() >= travelTime){
+                //moveTimerCheck = true;
+            //}
+            //cout << "left dist " << dist[0]<< " right dist " << dist[1]<<endl;
+            //updateCurrLocation(dist[0],dist[1]);
+            //cout << " " << endl;
+        //}
+        ////cout << "finished moving" << endl;
+        //if(((currentXPos <= targetXPos + errorRoom) && (currentXPos >= targetXPos - errorRoom)) && ((currentYPos <= targetYPos + errorRoom) && (currentYPos >= targetYPos - errorRoom)) && ((currentAngle <= targetAngle + angleErrorRoom) && (currentAngle >= targetAngle - angleErrorRoom))){
+        ////if(((currentXPos >= targetXPos - errorRoom)) && ((currentYPos >= targetYPos - errorRoom)) && ((currentAngle >= targetAngle - angleErrorRoom))){
+
+            //goalReached = true;
+        //}
+        //else{
+            //moveTimerCheck = false;
+            //tempcount = tempcount+1;
+            //cout<<"goal not reached? "<< goalReached <<" cycle " << tempcount <<endl;
+        //}
+    //}
+    
+    //cout << "final CurrX-" << currentXPos<< " CurrY-" << currentYPos<<" CurrA-" <<  currentAngle<< endl;
+    //cout << "goal Reached" << endl;
+    //stopMotors();
+//}
+
+
+
+
